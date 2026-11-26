@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101013">
+  <title>Routiq · Training dashboard</title>
+  <link rel="icon" href="mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><img src="mark.svg" alt=""><span>routiq</span></div>
+      <div class="sidebody">
+        <div class="navgroup">WORKSPACE</div>
+        <nav aria-label="Workspace">
+          <button data-page="Overview"><i data-icon="overview"></i>Overview</button>
+          <button data-page="Activities"><i data-icon="activity"></i>Activities</button>
+          <button data-page="Routes"><i data-icon="route"></i>Routes</button>
+        </nav>
+        <div class="navgroup second">TRAINING</div>
+        <nav aria-label="Training">
+          <button data-page="Statistics"><i data-icon="stats"></i>Statistics</button>
+          <button data-page="Goals"><i data-icon="target"></i>Goals</button>
+        </nav>
+      </div>
+      <button class="profile" id="profile"><span class="avatar" id="initials">JD</span><span><strong id="profileName">Jamie Davis</strong><small>Personal workspace</small></span><i data-icon="chevrons"></i></button>
+    </aside>
+    <main>
+      <header><div><div class="date-line" id="today"></div><h1 id="pageTitle">Overview</h1></div>
+        <button class="primary" id="log"><i data-icon="plus"></i>Log activity</button></header>
+      <div id="view"></div>
+    </main>
+  </div>
+  <dialog id="dialog"><div id="dialogBody"></div></dialog>
+  <div id="toast" role="status"></div>
+  <script src="map.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
