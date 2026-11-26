@@ -8,6 +8,75 @@ const Planner=(()=>{
   let start=places[0].slice(1),shape='Loop',popular=true,snap=true,showHeat=true;
   let waypoints=[],segments=[],points=[],km=0,density=null,variation=0,target=null,name='',draftId=null,message='';
   let camera=null;
+  let nearby=[],origin=null,originLabel='',searchVersion=0,geoVersion=0,searchTimer;
+  function suggestionsPanel(){
+    return `<section class="nearby-panel"><div class="nearby-head"><h2>Suggested routes</h2><div class="plan-buttons"><button class="secondary" data-pl="near-location">${icon('pin')}Use my location</button><button class="secondary" data-pl="near-map">Search map center</button></div></div><p id="nearbyInfo" class="plan-hint" role="status"></p><div id="nearbyResults" class="nearby-results"></div></section>`;
+  }
+  function invalidateNearby(){
+    clearTimeout(searchTimer);searchVersion++;geoVersion++;nearby=[];
+    if(byId('nearbyResults'))byId('nearbyResults').replaceChildren();
+  }
+  function refreshNearby(point=origin||start,label=originLabel||(area<0?'your selected start':places[area][0])){
+    invalidateNearby();origin=point.slice();originLabel=label;
+    if(!view?.isConnected)return;
+    const requested=Number(target??defaultKm());
+    if(!graph){byId('nearbyInfo').textContent='Loading mapped paths…';return}
+    if(!Number.isFinite(requested)||requested<.5||requested>80){byId('nearbyInfo').textContent='Enter a distance between 0.5 and 80 km.';return}
+    byId('nearbyInfo').textContent=`Looking for routes near ${label}…`;
+    const ticket=searchVersion;
+    searchTimer=setTimeout(()=>findNearby(point,label,requested,ticket),200);
+  }
+  async function findNearby(point,label,requested,ticket){
+    const candidates=places.map(([title,lat,lon],area)=>({title,area,id:graph.nearest([lat,lon],sport,300)})).filter(c=>c.id>=0);
+    const nearest=graph.nearest(point,sport,1500);
+    if(nearest>=0&&!candidates.some(c=>arcDistance(graph.points[c.id],graph.points[nearest])<.4)){
+      candidates.push({title:'Nearby path',area:-1,id:nearest});
+    }
+    candidates.forEach(c=>c.away=arcDistance(point,graph.points[c.id]));
+    candidates.sort((a,b)=>a.away-b.away);
+    const results=[];
+    for(const c of candidates){
+      if(c.away>35||results.length===3)break;
+      await new Promise(resolve=>setTimeout(resolve,0));
+      if(ticket!==searchVersion)return;
+      for(const kind of shape==='Loop'?['Loop','Out and back']:[shape]){
+        try{
+          const route=graph.generate(c.id,sport,requested,kind,popular);
+          results.push({...route,area:c.area,away:c.away,shape:kind,title:`${c.title} ${kind.toLowerCase()}`,target:requested});
+          break;
+        }catch{/* Another shape or start may have a connected route. */}
+      }
+    }
+    if(ticket!==searchVersion||!view?.isConnected)return;
+    nearby=results;
+    byId('nearbyInfo').textContent=results.length?`Near ${label} · ${sport} · ${distance(requested)} km target. Starts are ordered by straight-line distance.`:`No matching Scottsdale routes within 35 km of ${label}. Try another distance or search a different map area.`;
+    byId('nearbyResults').innerHTML=results.map((r,i)=>`<button class="nearby-card" data-nearby="${i}"><canvas class="nearby-track" aria-hidden="true"></canvas><span><strong>${esc(r.title)}</strong><span>${distance(r.km)} km · Start ${distance(r.away)} km away</span></span>${icon('chevron')}</button>`).join('');
+    byId('nearbyResults').querySelectorAll('canvas').forEach((canvas,i)=>RouteMap.draw(canvas,results[i]));
+  }
+  function nearLocation(){
+    invalidateNearby();
+    const ticket=geoVersion,info=byId('nearbyInfo');
+    if(!navigator.geolocation){info.textContent='Location is unavailable. Pan the map and select Search map center.';return}
+    info.textContent='Finding your location…';
+    navigator.geolocation.getCurrentPosition(pos=>{
+      if(ticket===geoVersion&&view?.isConnected)refreshNearby([pos.coords.latitude,pos.coords.longitude],'your location');
+    },()=>{if(ticket===geoVersion)info.textContent='Location is unavailable. Pan the map and select Search map center.'},{timeout:15000,maximumAge:60000});
+  }
+  function previewNearby(index){
+    const route=nearby[index];if(!route)return;
+    reset();mode='Generate';area=route.area;start=route.points[0];points=route.points;km=route.km;shape=route.shape;density=route.density;name=route.title;target=route.target;
+    message='Suggested route opened.';render();fit();byId('planMap').scrollIntoView({block:'center'});
+  }
+  function loadNetwork(){
+    loading??=fetch('scottsdale.json').then(r=>{
+      if(!r.ok)throw Error('Trail data unavailable.');
+      return r.json();
+    }).then(data=>{graph=new TrailNetwork(data);return graph}).catch(error=>{loading=null;throw error});
+    return loading;
+  }
+  function downloadRecord(record){
+    RouteFiles.open(record,graph||loadNetwork().catch(()=>null));
+  }
   const select=(items,value)=>items.map(v=>`<option ${v===value?'selected':''}>${esc(v)}</option>`).join('');
   function typical(){
     const rows=state.activities.filter(a=>a.sport===sport&&!a.sample&&a.km>0).sort((a,b)=>a.km-b.km);
@@ -18,7 +87,7 @@ const Planner=(()=>{
     return `<section class="plan-panel"><div class="plan-head"><h2>Route planner</h2><span>${icon('pin')}Scottsdale, AZ</span></div><div class="plan-grid"><div class="plan-map-wrap"><div id="planMap" aria-label="Interactive route planning map"></div><div class="map-tools"><button id="locatePlan" class="maptool" title="Use my location" aria-label="Use my location">${icon('pin')}</button></div><div class="map-legend"><span class="trail-key"></span>Mapped path <span class="heat-key"></span>GPS density</div></div>
     <div class="plan-controls"><div class="tabs plan-tabs">${['Generate','Draw route'].map(v=>`<button data-plan-mode="${v}" class="${mode===v?'on':''}" aria-pressed="${mode===v}">${v}</button>`).join('')}</div>
     <div id="planFields"></div><div id="planStatus" class="plan-status" role="status"></div><div id="planResult"></div></div></div>
-    <div class="plan-foot"><label><input id="heatSwitch" type="checkbox" ${showHeat?'checked':''}>Show heatmap</label><details><summary>Map data & coverage</summary><p>Routes follow Scottsdale’s mapped preserve trails and shared-use paths. Heat shows public GPS point density. Travel modes and unique visitor counts are unknown. Trail access can change.</p><p id="sampleInfo"></p><p><a href="https://maps.scottsdaleaz.gov/arcgis/rest/services/OpenData/MapServer/10" target="_blank" rel="noopener">City preserve trails</a> · <a href="https://maps.scottsdaleaz.gov/arcgis/rest/services/Biking_Hiking_Equestrian_Trails/MapServer/2" target="_blank" rel="noopener">Shared-use paths</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors / ODbL</a> · <a href="https://www.scottsdaleaz.gov/preserve" target="_blank" rel="noopener">Current preserve notices</a></p></details></div></section><div id="savedPlans"></div>`;
+    <div class="plan-foot"><label><input id="heatSwitch" type="checkbox" ${showHeat?'checked':''}>Show heatmap</label><details><summary>Map data & coverage</summary><p>Routes follow Scottsdale’s mapped preserve trails and shared-use paths. Heat shows public GPS point density. Travel modes and unique visitor counts are unknown. Trail access can change.</p><p id="sampleInfo"></p><p><a href="https://maps.scottsdaleaz.gov/arcgis/rest/services/OpenData/MapServer/10" target="_blank" rel="noopener">City preserve trails</a> · <a href="https://maps.scottsdaleaz.gov/arcgis/rest/services/Biking_Hiking_Equestrian_Trails/MapServer/2" target="_blank" rel="noopener">Shared-use paths</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors / ODbL</a> · <a href="https://www.scottsdaleaz.gov/preserve" target="_blank" rel="noopener">Current preserve notices</a></p></details></div></section>${suggestionsPanel()}<div id="savedPlans"></div>`;
   }
   function fields(){
     if(!view?.isConnected)return;
@@ -31,7 +100,7 @@ const Planner=(()=>{
   }
   function result(){
     const ready=points.length>1&&km>0;
-    byId('planResult').innerHTML=ready?`<div class="plan-summary"><strong>${distance(km)} <small>km</small></strong><span>${mode==='Generate'?esc(shape):waypoints.length+' waypoints'}</span></div><label>Route name<input id="planName" maxlength="80" placeholder="Name this route" value="${esc(name)}"></label><button data-pl="save" class="secondary save-plan">${draftId?'Update saved route':'Save route'}</button>`:'';
+    byId('planResult').innerHTML=ready?`<div class="plan-summary"><strong>${distance(km)} <small>km</small></strong><span>${mode==='Generate'?esc(shape):waypoints.length+' waypoints'}</span></div><label>Route name<input id="planName" maxlength="80" placeholder="Name this route" value="${esc(name)}"></label><button data-pl="save" class="secondary save-plan">${draftId?'Update saved route':'Save route'}</button><button data-pl="download" class="textbtn download-plan">Download route</button>`:'';
   }
   function library(){
     const plans=saved();
@@ -82,12 +151,12 @@ const Planner=(()=>{
     overlay=L.layerGroup().addTo(map);map.on('click',e=>placePoint([e.latlng.lat,e.latlng.lng]));
     byId('locatePlan').onclick=locate;fields();library();draw();
     try{
-      if(!graph){loading??=fetch('scottsdale.json').then(r=>{if(!r.ok)throw Error();return r.json()}).then(d=>new TrailNetwork(d)).catch(e=>{loading=null;throw e});graph=await loading}
+      if(!graph)await loadNetwork();
       if(view!==el||!el.isConnected)return;
-      trails();drawHeat();draw();fields();
+      trails();drawHeat();draw();fields();refreshNearby();
     }catch{if(view===el)status('Scottsdale paths could not load. Reopen Routes to retry, or draw using straight lines.')}
   }
-  function unmount(){if(map){camera={center:map.getCenter(),zoom:map.getZoom()};map.remove();map=null;overlay=null;heatLayer=null;trailLayer=null}view=null}
+  function unmount(){invalidateNearby();if(map){camera={center:map.getCenter(),zoom:map.getZoom()};map.remove();map=null;overlay=null;heatLayer=null;trailLayer=null}view=null}
   function locate(){
     if(!navigator.geolocation){status('Location is unavailable. Pan the map to your start.');return}
     const current=view;status('Finding your location…');
@@ -97,7 +166,7 @@ const Planner=(()=>{
     try{
       let id=-1;
       if(mode==='Generate'||snap){if(!graph)throw Error('The mapped paths are still loading.');id=graph.nearest(p,sport,180);if(id<0)throw Error('Choose a point closer to a mapped Scottsdale path, or use straight lines in Draw route.');p=graph.points[id]}
-      if(mode==='Generate'){reset();start=p;area=-1;message='Start updated.'}
+      if(mode==='Generate'){reset();start=p;area=-1;message='Start updated.';refreshNearby(p,'your selected start')}
       else{
         const previous=waypoints.at(-1);if(previous){
           if(TrailNetwork.metres(previous,p)<2)throw Error('Place the next point farther along the route.');
@@ -127,7 +196,7 @@ const Planner=(()=>{
   }
   function openPlan(id){
     const p=saved().find(x=>x.id===id);if(!p)return;
-    modal(p.title,`<div class="meta">${icon(sportIcon(p.sport))}${esc(p.sport)} · ${distance(p.km)} km · ${p.mode==='Generate'?esc(p.shape):'Custom route'}</div><div class="detail-map">${mapHtml(p)}</div><div class="form-actions spread"><button class="secondary" data-plan-delete="${esc(id)}">Delete</button><button class="primary" data-plan-edit="${esc(id)}">Open in planner</button></div>`);
+    modal(p.title,`<div class="meta">${icon(sportIcon(p.sport))}${esc(p.sport)} · ${distance(p.km)} km · ${p.mode==='Generate'?esc(p.shape):'Custom route'}</div><div class="detail-map">${mapHtml(p)}</div><button class="secondary save-plan" data-plan-download="${esc(id)}">Download route</button><div class="form-actions spread"><button class="secondary" data-plan-delete="${esc(id)}">Delete</button><button class="primary" data-plan-edit="${esc(id)}">Open in planner</button></div>`);
   }
   function edit(id){
     const p=saved().find(x=>x.id===id);if(!p)return;
@@ -138,6 +207,8 @@ const Planner=(()=>{
     const b=e.target.closest('button');if(!b)return;
     if(b.dataset.planMode){changeMode(b.dataset.planMode);return}
     if(b.dataset.planOpen){openPlan(b.dataset.planOpen);return}
+    if(b.dataset.nearby!==undefined){previewNearby(Number(b.dataset.nearby));return}
+    if(b.dataset.planDownload){const record=saved().find(p=>p.id===b.dataset.planDownload);if(record)downloadRecord(record);return}
     if(b.dataset.planEdit){edit(b.dataset.planEdit);return}
     if(b.dataset.planDelete){modal('Delete planned route?',`<p class="help">Remove this route from this device?</p><div class="form-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" data-plan-confirm="${esc(b.dataset.planDelete)}">Delete route</button></div>`);return}
     if(b.dataset.planConfirm){const id=b.dataset.planConfirm;try{localStorage.setItem(key,JSON.stringify(saved().filter(p=>p.id!==id)));if(draftId===id){reset();fields();draw()}dialog.close();library()}catch{notify('Could not delete route')}return}
@@ -146,22 +217,25 @@ const Planner=(()=>{
       case 'undo':waypoints.pop();segments.pop();rebuildSketch();message='';fields();draw();break;
       case 'clear':reset();fields();draw();break;
       case 'save':save();break;
+      case 'download':downloadRecord({title:name.trim()||'Routiq route',sport,points,km,mode,shape,snap});break;
+      case 'near-location':nearLocation();break;
+      case 'near-map':{const c=map.getCenter();refreshNearby([c.lat,c.lng],'the map center');break}
     }
   });
-  document.addEventListener('input',e=>{if(e.target.id==='planName')name=e.target.value;if(e.target.id==='planKm'){target=e.target.value;invalidateSuggestion()}});
+  document.addEventListener('input',e=>{if(e.target.id==='planName')name=e.target.value;if(e.target.id==='planKm'){target=e.target.value;invalidateSuggestion();refreshNearby()}});
   function invalidateSuggestion(){if(mode==='Generate'&&points.length){reset();draw();result();status('Generate a route with these preferences.')}}
   document.addEventListener('change',e=>{
     const v=e.target.value;
     switch(e.target.id){
       case 'heatSwitch':showHeat=e.target.checked;drawHeat();break;
-      case 'planSport':sport=v;target=null;reset();trails();fields();draw();break;
-      case 'planShape':shape=v;invalidateSuggestion();break;
-      case 'planPreference':popular=v==='Popular areas';invalidateSuggestion();break;
+      case 'planSport':sport=v;target=null;reset();trails();fields();draw();refreshNearby();break;
+      case 'planShape':shape=v;invalidateSuggestion();refreshNearby();break;
+      case 'planPreference':popular=v==='Popular areas';invalidateSuggestion();refreshNearby();break;
       case 'planSnap':snap=v==='Follow mapped paths';reset();fields();draw();break;
       case 'planArea':{
-        const idx=places.findIndex(p=>p[0]===v);if(idx<0)break;reset();area=idx;start=places[idx].slice(1);if(idx>=3)shape='Out and back';map.setView(start,14);fields();draw();break;
+        const idx=places.findIndex(p=>p[0]===v);if(idx<0)break;reset();area=idx;start=places[idx].slice(1);if(idx>=3)shape='Out and back';map.setView(start,14);fields();draw();refreshNearby(start,places[idx][0]);break;
       }
     }
   });
-  return {layout,mount,unmount,saved};
+  return {layout,mount,unmount,saved,downloadRecord};
 })();

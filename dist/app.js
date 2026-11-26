@@ -91,7 +91,7 @@ function render(){
 function detail(id){
   const a=state.activities.find(el=>el.id===id);if(!a)return;
   const pace=a.km&&a.sec?duration(a.sec/a.km):'—';
-  modal(a.title,`<div class="meta">${icon(sportIcon(a.sport))}${esc(a.sport)} · ${fmt(a.date,{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div>${hasMap(a)?`<div class="detail-map">${mapHtml(a)}</div>`:''}<div class="details-grid"><div><small>Distance</small><strong>${distance(a.km)} km</strong></div><div><small>Duration</small><strong>${duration(a.sec)}</strong></div><div><small>${a.sport==='Ride'?'Avg. speed':'Avg. pace'}</small><strong>${a.sport==='Ride'?distance(a.km*3600/a.sec)+' km/h':pace+' /km'}</strong></div></div>${a.elev!=null?`<p class="minor">Elevation gain · ${Math.round(a.elev)} m</p>`:''}${a.sample?'<p class="help settings-sep">Sample activity with an illustrated route.</p>':''}<div class="form-actions"><button class="secondary" data-remove="${esc(id)}">Delete activity</button></div>`);
+  modal(a.title,`<div class="meta">${icon(sportIcon(a.sport))}${esc(a.sport)} · ${fmt(a.date,{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div>${hasMap(a)?`<div class="detail-map">${mapHtml(a)}</div>`:''}<div class="details-grid"><div><small>Distance</small><strong>${distance(a.km)} km</strong></div><div><small>Duration</small><strong>${duration(a.sec)}</strong></div><div><small>${a.sport==='Ride'?'Avg. speed':'Avg. pace'}</small><strong>${a.sport==='Ride'?distance(a.km*3600/a.sec)+' km/h':pace+' /km'}</strong></div></div>${a.elev!=null?`<p class="minor">Elevation gain · ${Math.round(a.elev)} m</p>`:''}${a.sample?'<p class="help settings-sep">Sample activity with an illustrated route.</p>':''}${a.points?.length>1?`<button class="secondary save-plan" data-track-download="${esc(a.id)}">Download route</button>`:''}<div class="form-actions"><button class="secondary" data-remove="${esc(id)}">Delete activity</button></div>`);
 }
 function editGoal(){modal('Weekly distance goal',`<form id="goalForm"><label>Distance per week (km)<input name="goal" type="number" required min="0.1" max="10000" step="0.1" value="${state.goal}"></label><p class="help">Your training week starts on Monday.</p><div class="form-actions"><button class="primary">Save goal</button></div></form>`)}
 function profile(){
@@ -148,6 +148,7 @@ byId('log').addEventListener('click',()=>logForm());
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.page){page=b.dataset.page;history.replaceState(null,'',location.pathname+location.search+(page==='Routes'?'#routes':''));render();window.scrollTo(0,0);return}
+  if(b.dataset.trackDownload){const a=state.activities.find(row=>row.id===b.dataset.trackDownload);if(a)Planner.downloadRecord(a);return}
   if(b.dataset.detail){detail(b.dataset.detail);return}
   if(b.dataset.remove){confirmAction('Delete activity?','This activity will be removed from your training history.',`delete:${b.dataset.remove}`,'Delete activity');return}
   const action=b.dataset.action;
