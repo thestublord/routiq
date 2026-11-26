@@ -21,17 +21,19 @@ const Beacon=(()=>{
     else{group.innerHTML='<button class="secondary" data-beacon="start">Turn on Beacon</button>'}
   }
   function setStatus(s,text){if(active===s&&s.status!==text){s.status=text;renderControls()}}
-  async function api(action,body,keepalive=false){
-    const r=await fetch('/api/beacon/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store',keepalive,signal:AbortSignal.timeout(12000)});
+  async function api(action,body,origin='',keepalive=false){
+    const path=origin?origin+'/'+action:'/api/beacon/'+action;
+    const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store',keepalive,signal:AbortSignal.timeout(12000)});
     if(!r.ok){const e=Error('Beacon request failed');e.status=r.status;throw e}return r.json();
   }
   function pending(){
     try{return JSON.parse(sessionStorage.getItem(pendingKey)||'[]').filter(p=>p.until>Date.now())}catch{return []}
   }
   function remember(list){try{sessionStorage.setItem(pendingKey,JSON.stringify(list))}catch{}}
-  async function revoke(write){
-    const list=pending().filter(p=>p.write!==write);list.push({write,until:Date.now()+135000});remember(list);
-    try{await api('end',{write},true);remember(pending().filter(p=>p.write!==write));return true}catch{return false}
+  async function revoke(write,viewer){
+    if(!viewer)return true;
+    const list=pending().filter(p=>p.write!==write);list.push({write,viewer,until:Date.now()+135000});remember(list);
+    try{await api('end',{write},viewer,true);remember(pending().filter(p=>p.write!==write));return true}catch{return false}
   }
   function detach(){
     const old=active;active=null;clearInterval(tick);tick=null;return old;
@@ -39,7 +41,7 @@ const Beacon=(()=>{
   async function stop(){
     const old=detach();if(!old)return;
     latestNote='Location updates stopped. Closing the sharing link…';renderControls();
-    const confirmed=await revoke(old.write);
+    const confirmed=await revoke(old.write,old.viewer);
     if(!active){latestNote=confirmed?'Beacon is off. The previous link has ended.':'Updates stopped. Without a connection the link expires within two minutes of the last delivered update.';renderControls()}
   }
   async function publish(){
@@ -53,7 +55,7 @@ const Beacon=(()=>{
       const plain=new TextEncoder().encode(JSON.stringify({sport:rec.sport,fix:fix?{lat:fix.lat,lon:fix.lon,accuracy:fix.accuracy,age:Math.max(0,now-fix.t)}:null}));
       const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},s.key,plain);
       if(active!==s)return;
-      await api('update',{write:s.write,seq,packet:hex(iv)+hex(new Uint8Array(cipher))});
+      await api('update',{write:s.write,seq,packet:hex(iv)+hex(new Uint8Array(cipher))},s.viewer);
       setStatus(s,rec?.lastFix?'Beacon is on. Anyone with the link can see your latest GPS fix.':'Beacon is on. Waiting for your first GPS fix.');
     }catch(e){
       if(active!==s)return;
@@ -68,8 +70,11 @@ const Beacon=(()=>{
     try{
       const raw=crypto.getRandomValues(new Uint8Array(32));s.key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']);
       if(active!==s)return;
-      const {viewer}=await api('start',{read:s.read,write:s.write});
-      if(active!==s){await revoke(s.write);return}
+      const {viewer,grant,expires}=await api('start',{read:s.read,write:s.write});
+      if(active!==s)return;
+      s.viewer=viewer;
+      await api('start',{read:s.read,write:s.write,grant,expires},viewer);
+      if(active!==s){await revoke(s.write,viewer);return}
       s.link=viewer+'/#'+s.read+'.'+hex(raw);s.status='Beacon is on. Send this link to your contact.';
       renderControls();tick=setInterval(publish,1000);await publish();
     }catch{
@@ -91,7 +96,7 @@ const Beacon=(()=>{
     const action=e.target.closest('[data-beacon]')?.dataset.beacon;
     if(action==='start')start();if(action==='stop')stop();if(action==='share'||action==='copy')share(action==='share');
   });
-  function retryStops(){for(const p of pending())revoke(p.write)}
+  function retryStops(){for(const p of pending())revoke(p.write,p.viewer)}
   window.addEventListener('online',()=>{retryStops();if(active){active.attempt=0;publish()}});
   window.addEventListener('pagehide',()=>{if(active)stop()});
   retryStops();
