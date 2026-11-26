@@ -20,6 +20,8 @@ The Vercel build serves the dashboard at `/` and the public Beacon viewer at `/b
    To enter it with the Firebase console, add a root child named `members`, then add a child under it named exactly your UID and set its value to the boolean `true` (without quotation marks). The UID is the long string on the user's details page in **Authentication → Users**. This entry lets your signed-in account read and write its own private data. If the app is just for you, skip adding other users. Anyone you invite needs their own Authentication user and a matching UID entry. People opening a Beacon link can skip sign-in.
 5. Under **Project settings → General → Your apps**, register a web app. Copy its public web configuration. Include the exact HTTPS **databaseURL** shown in Realtime Database. If you registered the app before creating the database, add that field yourself.
 
+When updating Routiq later, publish any revised database rules from `database.rules.json` in **Realtime Database → Rules**. Vercel deployment does not publish Firebase rules.
+
 ## 2. Deploy the app
 
 Open the Vercel project and go to **Settings → Environment Variables**. Add these five entries, using the values from your Firebase web app config. Select **Production** and **Preview** for each entry.
@@ -49,5 +51,5 @@ Add the deployment hostname to Firebase Authentication's **Settings → Authoriz
 ## Storage and free-plan limits
 
 - Each user's activities, planned routes, goal and profile live under `workspaces/<uid>`. Changes awaiting upload are kept in that browser under the user's UID. After sync, the browser clears those pending edits. Data saved on the original ChatGPT Sites address stays in that browser's storage on the original address.
-- The server stores the latest encrypted Beacon packet under a randomly generated session ID. A successful stop removes the packet. If the phone disconnects, database rules deny new reads after two minutes without an update, or twelve hours from session creation. Interrupted sessions can leave expired ciphertext in the database. The project owner can remove old sessions in the Firebase console.
+- Firebase stores the latest encrypted Beacon packet under a randomly generated session ID. The link stays active until the host taps **Stop sharing** or finishes the recording. If GPS or network updates pause, the viewer hides positions older than two minutes and waits for the next update. When updates resume, the viewer reconnects to the same link. Closing or backgrounding the page pauses updates, so keep Routiq open during the activity.
 - Vercel Hobby covers personal, non-commercial projects. Firebase Spark includes 100 simultaneous Realtime Database connections, 1 GB stored and 10 GB downloaded per month. Check usage in your Firebase and Vercel dashboards. [Vercel Hobby](https://vercel.com/docs/plans/hobby) · [Firebase pricing](https://firebase.google.com/pricing)

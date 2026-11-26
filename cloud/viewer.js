@@ -40,16 +40,15 @@ document.getElementById('liveMap').addEventListener('keydown',e=>{if(e.key.start
 if(!match){status.textContent='Open the full Beacon link sent by the person sharing their activity.';return}
 const bytes=hex=>Uint8Array.from(hex.match(/../g),pair=>parseInt(pair,16));
 const key=await crypto.subtle.importKey('raw',bytes(match[2]),'AES-GCM',false,['decrypt']);
-let fix=null,sport='',remainingUntil=0,serverOffset=0,lastReply=0,failed=false,ended=false,busy=false,seq=-1;
+let fix=null,sport='',serverOffset=0,lastReply=0,failed=false,ended=false,busy=false,seq=-1;
 const stopClockSync=onValue(ref(database,'.info/serverTimeOffset'),snapshot=>{serverOffset=Number(snapshot.val()) || 0});
 function display(){
   if(ended)return;
   if(!lastReply){hide();status.textContent=failed?'Unable to connect. Retrying…':'Connecting to Beacon…';return}
   const time=Date.now();
-  if(time>=remainingUntil){hide();status.textContent='Sharing unconfirmed. Waiting for a current update.';return}
   if(!fix){hide();status.textContent=failed?'Connection interrupted. Retrying…':'Beacon is on. Waiting for a GPS fix.';return}
   const age=Math.max(0,time+serverOffset-fix.t);
-  if(age>=120000){hide();status.textContent='GPS signal unavailable. Waiting for a recent position.';return}
+  if(age>=120000){hide();status.textContent='GPS update paused. Waiting for a fresh position.';return}
   status.textContent=failed||time-lastReply>16000?'Connection interrupted. Showing the last received position.':age>=45000?'GPS update delayed. Showing the last known position.':sport+' · Sharing location';
   position.hidden=false;
   document.getElementById('coords').textContent=fix.lat.toFixed(5)+', '+fix.lon.toFixed(5);
@@ -59,14 +58,13 @@ function display(){
 async function poll(){
   if(ended||busy)return;busy=true;
   try{
-    const sent=Date.now();
     const res=await fetch(beaconUrl(match[1],'/state'),{cache:'no-store',signal:AbortSignal.timeout(9000)});
-    if([401,403,404].includes(res.status)){ended=true;fix=null;hide();status.textContent='This Beacon has ended or the link has expired.';clearInterval(refresh);clearInterval(clock);stopClockSync();return}
+    if([401,403,404].includes(res.status)){ended=true;fix=null;hide();status.textContent='This Beacon has ended.';clearInterval(refresh);clearInterval(clock);stopClockSync();return}
     if(!res.ok)throw Error();
     const record=await res.json();
     if(!record || record.ended)throw Error();
     const now=Date.now()+serverOffset;
-    const data={...record,received:record.updated,remaining:Math.min(120000,record.updated+120000-now,record.created+43200000-now)};
+    const data={...record,received:record.updated};
     if(data.packet&&seq!==data.seq){
       const packet=bytes(data.packet);
       const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:packet.slice(0,12)},key,packet.slice(12));const value=JSON.parse(new TextDecoder().decode(plain));
@@ -74,7 +72,7 @@ async function poll(){
       fix=p&&Number.isFinite(p.lat)&&Math.abs(p.lat)<=90&&Number.isFinite(p.lon)&&Math.abs(p.lon)<=180&&Number.isFinite(p.accuracy)&&p.accuracy>=0&&Number.isFinite(p.age)&&p.age>=0?{...p,t:data.received-p.age}:null;
       sport=value.sport;seq=data.seq;
     }
-    lastReply=Date.now();remainingUntil=sent+data.remaining;failed=false;
+    lastReply=Date.now();failed=false;
   }catch{failed=true}finally{busy=false;display()}
 }
 const refresh=setInterval(poll,5000),clock=setInterval(display,1000);

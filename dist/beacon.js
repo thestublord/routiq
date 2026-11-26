@@ -4,7 +4,7 @@ const Beacon=(()=>{
   const random=()=>hex(crypto.getRandomValues(new Uint8Array(32)));
   const pendingKey='routiq-beacon-stop-v1';
   function controlHtml(){
-    return `<section id="beaconControl" class="beacon-control"><h3>${icon('pin')}Beacon</h3><p class="help" id="beaconMessage" role="status"></p><div id="beaconButtons"></div><p class="minor beacon-note">Keep Routiq in the foreground. Screen lock can pause updates. Links expire after two minutes without contact or after 12 hours of sharing.</p></section>`;
+    return `<section id="beaconControl" class="beacon-control"><h3>${icon('pin')}Beacon</h3><p class="help" id="beaconMessage" role="status"></p><div id="beaconButtons"></div><p class="minor beacon-note">Keep Routiq open during your activity. If GPS updates pause, the viewer waits for them to resume. Stop sharing to end the link.</p></section>`;
   }
   function renderControls(){
     if(typeof rec!=='undefined'&&rec)byId('log').innerHTML=icon('activity')+(active?.link?'Recording · Beacon on':'Recording');
@@ -43,7 +43,7 @@ const Beacon=(()=>{
     const old=detach();if(!old)return;
     latestNote='Location updates stopped. Closing the sharing link…';renderControls();
     const confirmed=await revoke(old.write,old.viewer);
-    if(!active){latestNote=confirmed?'Beacon is off. The previous link has ended.':'Updates stopped. Without a connection the link expires within two minutes of the last delivered update.';renderControls()}
+    if(!active){latestNote=confirmed?'Beacon is off. The previous link has ended.':'Updates stopped, but Firebase could not confirm ending the link. Reopen Routiq while online to retry.';renderControls()}
   }
   async function publish(){
     const s=active;if(!s?.link||s.busy||!rec)return;
@@ -60,7 +60,7 @@ const Beacon=(()=>{
       setStatus(s,rec?.lastFix?'Beacon is on. Anyone with the link can see your latest GPS fix.':'Beacon is on. Waiting for your first GPS fix.');
     }catch(e){
       if(active!==s)return;
-      if(e.status===410){detach();latestNote='This Beacon expired. Turn it on again to create a new link.';renderControls()}
+      if(e.status===410){detach();latestNote='This Beacon has ended. Turn it on again to create a new link.';renderControls()}
       else setStatus(s,'Updates interrupted. Reconnecting… Your contact will see when the last position was received.');
     }finally{s.busy=false}
   }
@@ -106,7 +106,6 @@ const Beacon=(()=>{
   });
   function retryStops(){for(const p of pending())revoke(p.write,p.viewer)}
   window.addEventListener('online',()=>{retryStops();if(active){active.attempt=0;publish()}});
-  window.addEventListener('pagehide',()=>{if(active)stop()});
   retryStops();
   return {controlHtml,renderControls,fix,stop,newRecording(){latestNote=''},isSharing:()=>Boolean(active?.link)};
 })();

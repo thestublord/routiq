@@ -17,8 +17,8 @@
         ".validate": "newData.hasChildren(['owner','state'])",
         "owner": { ".validate": "newData.val() === auth.uid" },
         "state": {
-          ".read": "data.exists() && data.child('ended').val() === false && data.child('updated').val() + 120000 > now && data.child('created').val() + 43200000 > now",
-          ".validate": "newData.hasChildren(['created','updated','ended','seq']) && ((!data.exists() && newData.child('created').val() === now && newData.child('updated').val() === now && newData.child('ended').val() === false && newData.child('seq').val() === 0 && !newData.child('packet').exists()) || (data.exists() && newData.child('created').val() === data.child('created').val() && ((newData.child('ended').val() === true && !newData.child('packet').exists()) || (data.child('ended').val() === false && newData.child('ended').val() === false && data.child('updated').val() + 120000 > now && data.child('created').val() + 43200000 > now && newData.child('updated').val() === now && newData.child('seq').val() > data.child('seq').val() && newData.child('packet').exists()))))",
+          ".read": "data.exists() && data.child('ended').val() === false",
+          ".validate": "newData.hasChildren(['created','updated','ended','seq']) && ((!data.exists() && newData.child('created').val() === now && newData.child('updated').val() === now && newData.child('ended').val() === false && newData.child('seq').val() === 0 && !newData.child('packet').exists()) || (data.exists() && newData.child('created').val() === data.child('created').val() && ((newData.child('ended').val() === true && !newData.child('packet').exists()) || (data.child('ended').val() === false && newData.child('ended').val() === false && newData.child('updated').val() === now && newData.child('seq').val() > data.child('seq').val() && newData.child('packet').exists()))))",
           "created": { ".validate": "newData.isNumber()" },
           "updated": { ".validate": "newData.isNumber()" },
           "seq": { ".validate": "newData.isNumber()" },
