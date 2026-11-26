@@ -41,7 +41,9 @@ const sum = (arr,key) => arr.reduce((total,a)=>total+(Number(a[key])||0),0);
 function notify(message){const el=byId('toast');el.textContent=storageWarning?'Device storage unavailable. Changes last for this session.':message;el.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.style.display='none',3600)}
 let page=location.hash==='#routes'?'Routes':'Overview',period=7,query='',sportFilter='All sports',rec=null,watch=null,timer=null;
 const dialog=byId('dialog'),content=byId('dialogBody');
+dialog.addEventListener('close',()=>{if(!dialog.open)RecordingMap.remove()});
 function modal(title,body){
+  RecordingMap.remove();
   content.innerHTML=`<div class="modalhead"><h2 id="dialogTitle">${esc(title)}</h2><button class="icon-btn" data-action="close" aria-label="Close">${icon('close')}</button></div>${body}`;
   dialog.setAttribute('aria-labelledby','dialogTitle');if(!dialog.open)dialog.showModal();paintMaps();
 }
@@ -118,10 +120,10 @@ function arcDistance([lat1,lon1],[lat2,lon2]){
 }
 function recordPanel(){
   if(!rec)return;
-  modal(rec.title,`<div class="meta">${icon(sportIcon(rec.sport))}${rec.sport} · GPS recording</div><div class="details-grid"><div><small>Duration</small><strong id="liveTime"></strong></div><div><small>Distance</small><strong id="liveKm"></strong></div><div><small>GPS points</small><strong id="livePoints"></strong></div></div><p class="recording" id="gpsStatus" role="status"></p>${Beacon.controlHtml()}<div class="form-actions spread"><button class="secondary" data-action="discardRec">Discard</button><button class="primary" data-action="finishRec" id="finishRec">Finish and save</button></div>`);updateRec();Beacon.renderControls();
+  modal(rec.title,`<div class="meta">${icon(sportIcon(rec.sport))}${rec.sport} · GPS recording</div>${RecordingMap.html}<div class="details-grid"><div><small>Duration</small><strong id="liveTime"></strong></div><div><small>Distance</small><strong id="liveKm"></strong></div><div><small>GPS points</small><strong id="livePoints"></strong></div></div><p class="recording" id="gpsStatus" role="status"></p>${Beacon.controlHtml()}<div class="form-actions spread"><button class="secondary" data-action="discardRec">Discard</button><button class="primary" data-action="finishRec" id="finishRec">Finish and save</button></div>`);updateRec();Beacon.renderControls();
 }
 function elapsed(){return rec?.start?Math.max(0,Math.floor((Date.now()-rec.start)/1000)):0}
-function updateRec(){if(!rec||!byId('liveTime'))return;byId('liveTime').textContent=duration(elapsed());byId('liveKm').textContent=distance(rec.km)+' km';byId('livePoints').textContent=rec.points.length;byId('gpsStatus').textContent=rec.status;byId('finishRec').disabled=!rec.points.length||elapsed()<1}
+function updateRec(){if(!rec||!dialog.open||!byId('liveTime'))return;RecordingMap.show(rec);byId('liveTime').textContent=duration(elapsed());byId('liveKm').textContent=distance(rec.km)+' km';byId('livePoints').textContent=rec.points.length;byId('gpsStatus').textContent=rec.status;byId('finishRec').disabled=!rec.points.length||elapsed()<1}
 function startRecording(title,sport){
   if(!window.isSecureContext||!navigator.geolocation){modal('GPS unavailable','<p class="help">Open Routiq over HTTPS or localhost on a device with location services enabled.</p><div class="form-actions"><button class="secondary" data-action="manual">Use manual entry</button></div>');return}
   Beacon.newRecording();rec={title,sport,start:0,km:0,points:[],status:'Waiting for GPS…'};recordPanel();render();
