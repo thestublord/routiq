@@ -5,3 +5,4 @@
 /.firebase/
 /.env*
 /*-debug.log
+.vercel

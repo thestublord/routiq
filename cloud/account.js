@@ -19,7 +19,7 @@ let opening;
 async function beacon(action, body, origin, keepalive) {
   const user = auth.currentUser;
   if (!user) throw Error('Sign in to share a Beacon.');
-  const viewer = location.origin + '/beacon';
+  const viewer = (Capacitor.isNativePlatform() ? 'https://routiq-xi.vercel.app' : location.origin) + '/beacon';
   const create = action === 'start';
   if (!create && origin !== viewer) throw Error('Unknown Beacon origin');
   const url = beaconUrl(create ? body.read : body.write, create ? '' : '/state');
