@@ -22,27 +22,25 @@ The Vercel build serves the dashboard at `/` and the public Beacon viewer at `/b
 
 ## 2. Deploy the app
 
-Open PowerShell in the `routiq-app` folder. Create a free [Vercel Hobby account](https://vercel.com/signup) and run:
+Open the Vercel project and go to **Settings → Environment Variables**. Add these five entries, using the values from your Firebase web app config. Select **Production** and **Preview** for each entry.
 
-~~~powershell
-npx.cmd vercel login
-npx.cmd vercel link
-npx.cmd vercel env add FIREBASE_WEB_CONFIG production
-~~~
+| Key | Value |
+|---|---|
+| `apiKey` | Firebase `apiKey` |
+| `authDomain` | Firebase `authDomain` |
+| `databaseURL` | The HTTPS URL shown in Realtime Database |
+| `projectId` | Firebase `projectId` |
+| `appId` | Firebase `appId` |
 
-For the environment value, paste the configuration as JSON on one line, with quoted keys and strings. Replace every example value with your project's value.
+Enter each value by itself. Leave out JavaScript punctuation such as quotes, commas and parentheses. For example, the `databaseURL` value is `https://YOUR_DATABASE_URL`, with no quotation marks or trailing comma. Do not paste a service account key or password.
 
-~~~json
-{"apiKey":"YOUR_WEB_API_KEY","authDomain":"YOUR_PROJECT.firebaseapp.com","databaseURL":"https://YOUR_DATABASE_URL","projectId":"YOUR_PROJECT","appId":"YOUR_WEB_APP_ID"}
-~~~
+The build also accepts a single `FIREBASE_WEB_CONFIG` variable containing the five values as JSON. The five individual entries are simpler to add in Vercel's dashboard.
 
-Use the Firebase **web app config** here. Service account keys and passwords are private. Vercel bundles these five public fields into the browser app.
+Vercel bundles these public web app settings into the browser app. No service account key is needed.
 
-~~~powershell
-npx.cmd vercel --prod
-~~~
+After saving the entries, go to **Deployments** and redeploy the latest deployment. Or, from the `routiq-app` folder, run `npx vercel --prod` after authenticating with Vercel.
 
-The repository's Vercel settings run `npm run build` and publish `public/`. If you also use Vercel preview deployments, add the config to the Preview environment before building one.
+The repository's Vercel settings run `npm run build` and publish `public/`.
 
 ## 3. Open it on your phone
 

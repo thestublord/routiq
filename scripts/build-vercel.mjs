@@ -1,9 +1,18 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 
-const config = JSON.parse(process.env.FIREBASE_WEB_CONFIG || '{}');
-for (const key of ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId']) {
-  if (!config[key]) throw Error('Set FIREBASE_WEB_CONFIG with the Firebase web app configuration including ' + key);
+const keys = ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId'];
+const config = Object.fromEntries(keys.map(key=>{
+  const envKey = 'FIREBASE_' + key.replace(/[A-Z]/g,letter=>'_'+letter).toUpperCase();
+  return [key,process.env[key]?.trim() || process.env[envKey]?.trim() || ''];
+}));
+if (process.env.FIREBASE_WEB_CONFIG) {
+  Object.assign(config,JSON.parse(process.env.FIREBASE_WEB_CONFIG));
+}
+for (const key of keys) {
+  if (typeof config[key] !== 'string' || !config[key].trim()) {
+    throw Error('Set the Vercel environment variable ' + key + ' to the value from your Firebase web app config.');
+  }
 }
 const emulator = process.env.ROUTIQ_EMULATORS === '1';
 if (emulator && (process.env.VERCEL || !config.projectId.startsWith('demo-'))) {
