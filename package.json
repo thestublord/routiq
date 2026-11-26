@@ -1,0 +1,7 @@
+{
+  "name": "routiq",
+  "private": true,
+  "scripts": { "build": "node scripts/build-vercel.mjs" },
+  "dependencies": { "firebase": "13.4.0" },
+  "devDependencies": { "esbuild": "0.25.12" }
+}

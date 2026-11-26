@@ -1,1 +1,7 @@
 /dist/server/
+/public/
+/node_modules/
+/.vercel/
+/.firebase/
+/.env*
+/*-debug.log

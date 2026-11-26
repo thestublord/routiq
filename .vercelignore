@@ -1,0 +1,7 @@
+.openai
+.firebase
+.env*
+*-debug.log
+dist/server
+public
+node_modules

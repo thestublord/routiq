@@ -25,10 +25,10 @@ function sampleLog(){
 }
 const storageKey='routiq-log-v1';
 let state;
-try{state=JSON.parse(localStorage.getItem(storageKey))}catch{}
+try{state=window.RoutiqCloud?.log() || JSON.parse(localStorage.getItem(storageKey))}catch{}
 if(!state||!Array.isArray(state.activities))state={activities:sampleLog(),goal:50,name:'Jamie Davis'};
 let storageWarning=false;
-function persist(){try{localStorage.setItem(storageKey,JSON.stringify(state));return true}catch{storageWarning=true;return false}}
+function persist(){try{if(window.RoutiqCloud)RoutiqCloud.saveLog(state);else localStorage.setItem(storageKey,JSON.stringify(state));return true}catch{storageWarning=true;return false}}
 persist();
 const distance = km => Number(km.toFixed(2)).toLocaleString('en-US',{maximumFractionDigits:2});
 function duration(sec){sec=Math.round(sec);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=String(sec%60).padStart(2,'0');return h?`${h}:${String(m).padStart(2,'0')}:${s}`:`${m}:${s}`}
@@ -97,7 +97,7 @@ function detail(id){
 }
 function editGoal(){modal('Weekly distance goal',`<form id="goalForm"><label>Distance per week (km)<input name="goal" type="number" required min="0.1" max="10000" step="0.1" value="${state.goal}"></label><p class="help">Your training week starts on Monday.</p><div class="form-actions"><button class="primary">Save goal</button></div></form>`)}
 function profile(){
-  modal('Workspace settings',`<form id="profileForm"><label>Your name<input name="name" required maxlength="40" value="${esc(state.name)}"></label><p class="help">Your activities and settings are saved in this browser.</p><div class="form-actions"><button class="primary">Save changes</button></div></form>${state.activities.some(a=>a.sample)?'<div class="settings-sep"><button class="secondary" data-action="clearSamples">Remove sample activities</button></div>':''}`);
+  modal('Workspace settings',`<form id="profileForm"><label>Your name<input name="name" required maxlength="40" value="${esc(state.name)}"></label><p class="help">${window.RoutiqCloud?'Activities, routes and settings sync to your Firebase account.':'Your activities and settings are saved in this browser.'}</p><div class="form-actions"><button class="primary">Save changes</button></div></form>${window.RoutiqCloud?'<div class="settings-sep"><button class="secondary" data-action="signOut">Sign out</button></div>':''}${state.activities.some(a=>a.sample)?'<div class="settings-sep"><button class="secondary" data-action="clearSamples">Remove sample activities</button></div>':''}`);
 }
 const sportOptions=selected=>['Run','Ride','Walk'].map(s=>`<option ${s===selected?'selected':''}>${s}</option>`).join('');
 function logForm(mode='manual'){
@@ -161,6 +161,7 @@ document.addEventListener('click',e=>{
     case 'manual':case 'gps':logForm(action);break;
     case 'goal':editGoal();break;
     case 'profile':profile();break;
+    case 'signOut':if(rec)notify('Finish your recording before signing out.');else window.RoutiqCloud?.signOut();break;
     case 'clearSamples':confirmAction('Remove sample activities?','This removes the example workouts and keeps all activities you recorded or entered.','confirmSamples','Remove samples');break;
     case 'confirmSamples':state.activities=state.activities.filter(a=>!a.sample);persist();dialog.close();render();notify('Sample activities removed');break;
     case 'finishRec':finishRecording();break;
@@ -183,3 +184,5 @@ window.addEventListener('beforeunload',e=>{if(rec){e.preventDefault();e.returnVa
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(paintMaps,100)});
 render();
 
+
+window.addEventListener('routiq-workspace',()=>{state=RoutiqCloud.log();if(page==='Routes'){Planner.library();paintMaps()}else render()});

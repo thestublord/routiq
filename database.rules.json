@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "workspaces": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && root.child('members').child($uid).val() === true",
+        ".write": "auth != null && auth.uid === $uid && root.child('members').child($uid).val() === true",
+        "name": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "goal": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10000" },
+        "activities": { "$id": { ".validate": "newData.isString()" } },
+        "routes": { "$id": { ".validate": "newData.isString()" } },
+        "$other": { ".validate": false }
+      }
+    },
+    "beacons": {
+      "$id": {
+        ".write": "auth != null && root.child('members').child(auth.uid).val() === true && $id.matches(/^[a-f0-9]{64}$/) && newData.exists() && ((!data.exists() && newData.child('owner').val() === auth.uid) || data.child('owner').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['owner','state'])",
+        "owner": { ".validate": "newData.val() === auth.uid" },
+        "state": {
+          ".read": "data.exists() && data.child('ended').val() === false && data.child('updated').val() + 120000 > now && data.child('created').val() + 43200000 > now",
+          ".validate": "newData.hasChildren(['created','updated','ended','seq']) && ((!data.exists() && newData.child('created').val() === now && newData.child('updated').val() === now && newData.child('ended').val() === false && newData.child('seq').val() === 0 && !newData.child('packet').exists()) || (data.exists() && newData.child('created').val() === data.child('created').val() && ((newData.child('ended').val() === true && !newData.child('packet').exists()) || (data.child('ended').val() === false && newData.child('ended').val() === false && data.child('updated').val() + 120000 > now && data.child('created').val() + 43200000 > now && newData.child('updated').val() === now && newData.child('seq').val() > data.child('seq').val() && newData.child('packet').exists()))))",
+          "created": { ".validate": "newData.isNumber()" },
+          "updated": { ".validate": "newData.isNumber()" },
+          "seq": { ".validate": "newData.isNumber()" },
+          "ended": { ".validate": "newData.isBoolean()" },
+          "packet": { ".validate": "newData.isString() && newData.val().length <= 4096 && newData.val().matches(/^[a-f0-9]+$/)" },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

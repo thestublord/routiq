@@ -22,6 +22,7 @@ const Beacon=(()=>{
   }
   function setStatus(s,text){if(active===s&&s.status!==text){s.status=text;renderControls()}}
   async function api(action,body,origin='',keepalive=false){
+    if(window.RoutiqCloud)return RoutiqCloud.beacon(action,body,origin,keepalive);
     const path=origin?origin+'/'+action:'/api/beacon/'+action;
     const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store',keepalive,signal:AbortSignal.timeout(12000)});
     if(!r.ok){const e=Error('Beacon request failed');e.status=r.status;throw e}return r.json();
@@ -67,13 +68,20 @@ const Beacon=(()=>{
     if(!rec||active)return;
     if(!window.isSecureContext||!crypto.subtle){latestNote='Beacon needs a secure browser connection.';renderControls();return}
     const s={read:random(),write:random(),key:null,link:'',status:'Starting encrypted sharing…',attempt:0,seq:0,dirty:true,busy:false};active=s;latestNote='';renderControls();
+    if(window.RoutiqCloud)s.write=s.read;
     try{
       const raw=crypto.getRandomValues(new Uint8Array(32));s.key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']);
       if(active!==s)return;
-      const {viewer,grant,expires}=await api('start',{read:s.read,write:s.write});
-      if(active!==s)return;
+      let viewer;
+      if(window.RoutiqCloud){
+        ({viewer}=await api('start',{read:s.read}));
+      }else{
+        const grant=await api('start',{read:s.read,write:s.write});
+        if(active!==s)return;
+        viewer=grant.viewer;
+        await api('start',{read:s.read,write:s.write,grant:grant.grant,expires:grant.expires},viewer);
+      }
       s.viewer=viewer;
-      await api('start',{read:s.read,write:s.write,grant,expires},viewer);
       if(active!==s){await revoke(s.write,viewer);return}
       s.link=viewer+'/#'+s.read+'.'+hex(raw);s.status='Beacon is on. Send this link to your contact.';
       renderControls();tick=setInterval(publish,1000);await publish();

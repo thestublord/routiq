@@ -1,0 +1,5 @@
+#accountGate {max-width:24rem;margin:12vh auto;padding:1.6rem}
+#accountForm {display:grid;gap:1rem}
+#accountMessage {color:#beb9c8;line-height:1.5}
+html:not(.workspace-open) .shell,.workspace-open #accountGate {display:none}
+#syncStatus {position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:1100;padding:.55rem .85rem;border-radius:.5rem;background:#352e3e;color:white;text-align:center}

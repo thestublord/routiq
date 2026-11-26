@@ -3,7 +3,7 @@ const Planner=(()=>{
     ['Gateway',33.64939,-111.85825],["Brown’s Ranch",33.76158,-111.84224],['Lost Dog Wash',33.59965,-111.81296],['Eldorado Greenbelt',33.4775,-111.9124],['Chaparral Greenbelt',33.51101,-111.90657]
   ];
   const key='routiq-planned-v1';
-  const saved=()=>{try{const rows=JSON.parse(localStorage.getItem(key));return Array.isArray(rows)?rows:[]}catch{return []}};
+  const saved=()=>{if(window.RoutiqCloud)return RoutiqCloud.routes();try{const rows=JSON.parse(localStorage.getItem(key));return Array.isArray(rows)?rows:[]}catch{return []}};
   let graph,loading,map,overlay,trailLayer,heatLayer,view,mode='Generate',sport='Run',area=0;
   let start=places[0].slice(1),shape='Loop',popular=true,snap=true,showHeat=true;
   let waypoints=[],segments=[],points=[],km=0,density=null,variation=0,target=null,name='',draftId=null,message='';
@@ -188,11 +188,12 @@ const Planner=(()=>{
     }catch(e){reset();fields();draw();status(e.message)}
   }
   function fit(){if(points.length>1)map.fitBounds(L.latLngBounds(points),{padding:[30,30],maxZoom:17,animate:false})}
+  function storeRoutes(rows){if(window.RoutiqCloud)RoutiqCloud.saveRoutes(rows);else localStorage.setItem(key,JSON.stringify(rows))}
   function save(){
     const title=byId('planName').value.trim();if(!title){byId('planName').focus();status('Enter a name before saving.');return}
     const record={id:draftId||crypto.randomUUID(),title,sport,km,points,waypoints,segments,mode,shape,snap,start,area,target,popular,density};
     const plans=saved().filter(p=>p.id!==record.id);plans.unshift(record);
-    try{localStorage.setItem(key,JSON.stringify(plans));draftId=record.id;name=title;library();result();status('Route saved on this device.')}catch{status('Device storage is full or unavailable. The route is still open.')}
+    try{storeRoutes(plans);draftId=record.id;name=title;library();result();status(window.RoutiqCloud?'Route saved.':'Route saved on this device.')}catch{status('Device storage is full or unavailable. The route is still open.')}
   }
   function openPlan(id){
     const p=saved().find(x=>x.id===id);if(!p)return;
@@ -210,8 +211,8 @@ const Planner=(()=>{
     if(b.dataset.nearby!==undefined){previewNearby(Number(b.dataset.nearby));return}
     if(b.dataset.planDownload){const record=saved().find(p=>p.id===b.dataset.planDownload);if(record)downloadRecord(record);return}
     if(b.dataset.planEdit){edit(b.dataset.planEdit);return}
-    if(b.dataset.planDelete){modal('Delete planned route?',`<p class="help">Remove this route from this device?</p><div class="form-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" data-plan-confirm="${esc(b.dataset.planDelete)}">Delete route</button></div>`);return}
-    if(b.dataset.planConfirm){const id=b.dataset.planConfirm;try{localStorage.setItem(key,JSON.stringify(saved().filter(p=>p.id!==id)));if(draftId===id){reset();fields();draw()}dialog.close();library()}catch{notify('Could not delete route')}return}
+    if(b.dataset.planDelete){modal('Delete planned route?',`<p class="help">Remove this saved route?</p><div class="form-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" data-plan-confirm="${esc(b.dataset.planDelete)}">Delete route</button></div>`);return}
+    if(b.dataset.planConfirm){const id=b.dataset.planConfirm;try{storeRoutes(saved().filter(p=>p.id!==id));if(draftId===id){reset();fields();draw()}dialog.close();library()}catch{notify('Could not delete route')}return}
     switch(b.dataset.pl){
       case 'generate':generate();break;
       case 'undo':waypoints.pop();segments.pop();rebuildSketch();message='';fields();draw();break;
@@ -237,5 +238,5 @@ const Planner=(()=>{
       }
     }
   });
-  return {layout,mount,unmount,saved,downloadRecord};
+  return {layout,mount,unmount,saved,downloadRecord,library};
 })();
