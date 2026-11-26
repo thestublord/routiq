@@ -131,8 +131,9 @@ function startRecording(title,sport){
   const acceptPosition=pos=>{
     if(!rec)return;
     const accuracy=Number(pos.coords?.accuracy);
+    Beacon.fix(pos);
     if(accuracy>75){rec.status='Waiting for a more accurate GPS fix…';updateRec();return}
-    Beacon.fix(pos);const point=[pos.coords.latitude,pos.coords.longitude],prev=rec.points.at(-1),delta=prev?arcDistance(prev,point):0;
+    const point=[pos.coords.latitude,pos.coords.longitude],prev=rec.points.at(-1),delta=prev?arcDistance(prev,point):0;
     if(!prev||delta>=.006){rec.points.push(point);rec.km+=delta}
     if(!rec.start)rec.start=Number(pos.timestamp)||Date.now();
     rec.status=native?'Recording · Android background tracking is on':'Recording · Keep this page open';updateRec();
