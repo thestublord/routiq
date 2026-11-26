@@ -51,6 +51,8 @@ The Android app uses Routiq's existing web interface inside an Android app. GPS 
 From the `routiq-app` folder, link this checkout to your Vercel project if you have not already:
 
 ~~~bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
 npx vercel login
 npx vercel link
 npx vercel env pull .env.local --environment=production
@@ -64,7 +66,7 @@ npm run android:sync
 npm run android:open
 ~~~
 
-In Android Studio, select your connected phone and press **Run**. On the phone, allow location and notification access when prompted. The foreground notification shows while Routiq records. Install and launch the Android app to record in the background. The Chrome version remains foreground-only.
+If `android:open` cannot find Android Studio, open Studio and choose the `routiq-app/android` folder. Select your connected phone and press **Run**. On the phone, allow location and notification access when prompted. The foreground notification shows while Routiq records. Install and launch the Android app to record in the background. The Chrome version remains foreground-only.
 
 To share a test install, Android Studio can build a debug APK from **Build → Build Bundle(s) / APK(s) → Build APK(s)**. A release APK for broader distribution needs signing.
 
