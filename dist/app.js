@@ -76,7 +76,7 @@ function render(){
   const rows=recent();byId('pageTitle').textContent=page;document.title=`${page} · Routiq`;
   byId('today').textContent=fmt(new Date(),{weekday:'long',month:'long',day:'numeric',year:'numeric'}).toUpperCase();
   byId('profileName').textContent=state.name;byId('initials').textContent=state.name.trim().split(/\s+/).slice(0,2).map(v=>v[0]).join('').toUpperCase();
-  byId('log').innerHTML=rec?`${icon('activity')}Recording`:`${icon('plus')}Log activity`;
+  byId('log').innerHTML=rec?`${icon('activity')}${Beacon.isSharing()?'Recording · Beacon on':'Recording'}`:`${icon('plus')}Log activity`;
   document.querySelectorAll('nav button').forEach(el=>{el.classList.toggle('active',el.dataset.page===page);if(el.dataset.page===page)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')});
   let html='';
   if(page==='Overview')html=hero(rows[0])+`<div class="dashboard-grid">${chart()}${goal()}</div><div class="section-title"><h2>Recent activities</h2><button class="textbtn" data-page="Activities">View all activities</button></div>`+list(rows.slice(0,3));
@@ -118,27 +118,28 @@ function arcDistance([lat1,lon1],[lat2,lon2]){
 }
 function recordPanel(){
   if(!rec)return;
-  modal(rec.title,`<div class="meta">${icon(sportIcon(rec.sport))}${rec.sport} · GPS recording</div><div class="details-grid"><div><small>Duration</small><strong id="liveTime"></strong></div><div><small>Distance</small><strong id="liveKm"></strong></div><div><small>GPS points</small><strong id="livePoints"></strong></div></div><p class="recording" id="gpsStatus" role="status"></p><div class="form-actions spread"><button class="secondary" data-action="discardRec">Discard</button><button class="primary" data-action="finishRec" id="finishRec">Finish and save</button></div>`);updateRec();
+  modal(rec.title,`<div class="meta">${icon(sportIcon(rec.sport))}${rec.sport} · GPS recording</div><div class="details-grid"><div><small>Duration</small><strong id="liveTime"></strong></div><div><small>Distance</small><strong id="liveKm"></strong></div><div><small>GPS points</small><strong id="livePoints"></strong></div></div><p class="recording" id="gpsStatus" role="status"></p>${Beacon.controlHtml()}<div class="form-actions spread"><button class="secondary" data-action="discardRec">Discard</button><button class="primary" data-action="finishRec" id="finishRec">Finish and save</button></div>`);updateRec();Beacon.renderControls();
 }
 function elapsed(){return rec?.start?Math.max(0,Math.floor((Date.now()-rec.start)/1000)):0}
 function updateRec(){if(!rec||!byId('liveTime'))return;byId('liveTime').textContent=duration(elapsed());byId('liveKm').textContent=distance(rec.km)+' km';byId('livePoints').textContent=rec.points.length;byId('gpsStatus').textContent=rec.status;byId('finishRec').disabled=!rec.points.length||elapsed()<1}
 function startRecording(title,sport){
   if(!window.isSecureContext||!navigator.geolocation){modal('GPS unavailable','<p class="help">Open Routiq over HTTPS or localhost on a device with location services enabled.</p><div class="form-actions"><button class="secondary" data-action="manual">Use manual entry</button></div>');return}
-  rec={title,sport,start:0,km:0,points:[],status:'Waiting for GPS…'};recordPanel();render();
+  Beacon.newRecording();rec={title,sport,start:0,km:0,points:[],status:'Waiting for GPS…'};recordPanel();render();
   watch=navigator.geolocation.watchPosition(pos=>{
     if(!rec)return;
     if(pos.coords.accuracy>75){rec.status='Waiting for a more accurate GPS fix…';updateRec();return}
-    const point=[pos.coords.latitude,pos.coords.longitude],prev=rec.points.at(-1),delta=prev?arcDistance(prev,point):0;
+    Beacon.fix(pos);const point=[pos.coords.latitude,pos.coords.longitude],prev=rec.points.at(-1),delta=prev?arcDistance(prev,point):0;
     if(!prev||delta>=.006){rec.points.push(point);rec.km+=delta}
     if(!rec.start)rec.start=Date.now();rec.status='Recording · Keep this page open';updateRec();
   },error=>{
     if(!rec)return;
+    if(error.code===1)Beacon.stop();
     if(error.code===1&&!rec.points.length){stopRecording();modal('Location access needed','<p class="help">Allow location access in your browser settings to record a route, or log the activity manually.</p><div class="form-actions"><button class="secondary" data-action="manual">Manual entry</button><button class="primary" data-action="gps">Try again</button></div>');return}
     rec.status=error.code===1?'Location permission was removed. You can save the recorded track.':'GPS signal unavailable. Waiting for a new fix…';updateRec();
   },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
   timer=setInterval(updateRec,500);
 }
-function stopRecording(){if(watch!==null)navigator.geolocation.clearWatch(watch);clearInterval(timer);watch=null;timer=null;rec=null;render()}
+function stopRecording(){Beacon.stop();if(watch!==null)navigator.geolocation.clearWatch(watch);clearInterval(timer);watch=null;timer=null;rec=null;render()}
 function finishRecording(){if(!rec?.points.length||elapsed()<1)return;const {title,sport,start,km,points}=rec,sec=elapsed();stopRecording();addActivity({title,sport,date:new Date(start).toISOString(),km,sec,elev:null,points})}
 function confirmAction(title,description,action,label){
   modal(title,`<p class="help">${esc(description)}</p><div class="form-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" data-action="${esc(action)}">${esc(label)}</button></div>`);
