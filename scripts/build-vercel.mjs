@@ -1,5 +1,9 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { build } from 'esbuild';
+import dotenv from 'dotenv';
+
+if (existsSync('.env.local')) dotenv.config({path:'.env.local'});
 
 const keys = ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId'];
 const config = Object.fromEntries(keys.map(key=>{

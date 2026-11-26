@@ -1,7 +1,13 @@
 import { connectAuthEmulator, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { app, beaconUrl } from './firebase.js';
 import { openWorkspace } from './workspace.js';
 
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
+window.RoutiqNativeTracking = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+  ? {BackgroundGeolocation,LocalNotifications}
+  : null;
 const auth = getAuth(app);
 if (USE_EMULATORS) connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
 const form = document.getElementById('accountForm');

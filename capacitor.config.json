@@ -1,0 +1,8 @@
+{
+  "appId": "com.routiq.app",
+  "appName": "Routiq",
+  "webDir": "public",
+  "android": {
+    "useLegacyBridge": true
+  }
+}

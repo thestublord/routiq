@@ -44,6 +44,30 @@ After saving the entries, go to **Deployments** and redeploy the latest deployme
 
 The repository's Vercel settings run `npm run build` and publish `public/`.
 
+## Build the Android app
+
+The Android app uses Routiq's existing web interface inside an Android app. GPS recording uses Android's foreground location service, with a persistent notification while recording. Start the recording while Routiq is open. Then you can switch apps or lock the screen without closing the tracking service. Android may stop any app if you force-stop it in system settings.
+
+From the `routiq-app` folder, link this checkout to your Vercel project if you have not already:
+
+~~~bash
+npx vercel login
+npx vercel link
+npx vercel env pull .env.local --environment=production
+~~~
+
+The local `.env.local` file contains your five individual Firebase web config variables and is excluded from Git. Build and copy the Android app assets, then open the project in Android Studio:
+
+~~~bash
+npm install
+npm run android:sync
+npm run android:open
+~~~
+
+In Android Studio, select your connected phone and press **Run**. On the phone, allow location and notification access when prompted. The foreground notification shows while Routiq records. Install and launch the Android app to record in the background. The Chrome version remains foreground-only.
+
+To share a test install, Android Studio can build a debug APK from **Build → Build Bundle(s) / APK(s) → Build APK(s)**. A release APK for broader distribution needs signing.
+
 ## 3. Open it on your phone
 
 Add the deployment hostname to Firebase Authentication's **Settings → Authorized domains**. Open the production HTTPS link in your phone's browser and sign in. Save an activity on the phone, then sign in on another device to see it there. During a GPS recording, tap **Turn on Beacon** and open the sharing link in another browser. Keep the recording page in the foreground for GPS updates.

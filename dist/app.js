@@ -39,7 +39,7 @@ const activityDate = a => fmt(a.date,{month:'short',day:'numeric'});
 function when(a){const diff=dayKey(new Date(a.date));return diff===dayKey(new Date())?'Today':diff===dayKey(daysAgo(1))?'Yesterday':activityDate(a)}
 const sum = (arr,key) => arr.reduce((total,a)=>total+(Number(a[key])||0),0);
 function notify(message){const el=byId('toast');el.textContent=storageWarning?'Device storage unavailable. Changes last for this session.':message;el.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.style.display='none',3600)}
-let page=location.hash==='#routes'?'Routes':'Overview',period=7,query='',sportFilter='All sports',rec=null,watch=null,timer=null;
+let page=location.hash==='#routes'?'Routes':'Overview',period=7,query='',sportFilter='All sports',rec=null,watch=null,nativeWatch=null,nativeStart=0,timer=null;
 const dialog=byId('dialog'),content=byId('dialogBody');
 dialog.addEventListener('close',()=>{if(!dialog.open)RecordingMap.remove()});
 function modal(title,body){
@@ -105,7 +105,7 @@ function logForm(mode='manual'){
   const tabs=`<div class="tabs"><button class="${mode==='manual'?'on':''}" data-action="manual">Manual entry</button><button class="${mode==='gps'?'on':''}" data-action="gps">GPS recording</button></div>`;
   const fields=`<label>Activity name<input name="title" maxlength="80" required placeholder="Morning trail run"></label><label>Sport<select name="sport">${sportOptions('Run')}</select></label>`;
   if(mode==='gps'){
-    modal('Record activity',tabs+`<form id="gpsForm">${fields}<p class="help">Allow location access and keep this page open while you move. Recording starts with the first GPS fix.</p><div class="form-actions"><button class="primary">${icon('pin')}Start recording</button></div></form>`);
+    modal('Record activity',tabs+`<form id="gpsForm">${fields}<p class="help">${window.RoutiqNativeTracking?'Allow location and notification access. Android keeps tracking with a persistent notification while Routiq is in the background.':'Allow location access and keep this page open while you move. Recording starts with the first GPS fix.'}</p><div class="form-actions"><button class="primary">${icon('pin')}Start recording</button></div></form>`);
   }else{
     modal('Log activity',tabs+`<form id="manualForm">${fields}<div class="formpair"><label>Distance (km)<input name="km" type="number" required min="0.01" step="0.01" placeholder="5.00"></label><label>Duration (minutes)<input name="minutes" type="number" required min="0.1" step="0.1" placeholder="30"></label></div><div class="formpair"><label>Date<input name="date" type="date" required max="${dayKey(new Date())}" value="${dayKey(new Date())}"></label><label>Elevation gain (m)<input name="elev" type="number" min="0" step="1" placeholder="Optional"></label></div><div class="form-actions"><button class="primary">Save activity</button></div></form>`);
   }
@@ -125,23 +125,54 @@ function recordPanel(){
 function elapsed(){return rec?.start?Math.max(0,Math.floor((Date.now()-rec.start)/1000)):0}
 function updateRec(){if(!rec||!dialog.open||!byId('liveTime'))return;RecordingMap.show(rec);byId('liveTime').textContent=duration(elapsed());byId('liveKm').textContent=distance(rec.km)+' km';byId('livePoints').textContent=rec.points.length;byId('gpsStatus').textContent=rec.status;byId('finishRec').disabled=!rec.points.length||elapsed()<1}
 function startRecording(title,sport){
-  if(!window.isSecureContext||!navigator.geolocation){modal('GPS unavailable','<p class="help">Open Routiq over HTTPS or localhost on a device with location services enabled.</p><div class="form-actions"><button class="secondary" data-action="manual">Use manual entry</button></div>');return}
+  const native=window.RoutiqNativeTracking;
+  if(!native&&(!window.isSecureContext||!navigator.geolocation)){modal('GPS unavailable','<p class="help">Open Routiq over HTTPS or localhost on a device with location services enabled.</p><div class="form-actions"><button class="secondary" data-action="manual">Use manual entry</button></div>');return}
   Beacon.newRecording();rec={title,sport,start:0,km:0,points:[],status:'Waiting for GPS…'};recordPanel();render();
-  watch=navigator.geolocation.watchPosition(pos=>{
+  const acceptPosition=pos=>{
     if(!rec)return;
-    if(pos.coords.accuracy>75){rec.status='Waiting for a more accurate GPS fix…';updateRec();return}
+    const accuracy=Number(pos.coords?.accuracy);
+    if(accuracy>75){rec.status='Waiting for a more accurate GPS fix…';updateRec();return}
     Beacon.fix(pos);const point=[pos.coords.latitude,pos.coords.longitude],prev=rec.points.at(-1),delta=prev?arcDistance(prev,point):0;
     if(!prev||delta>=.006){rec.points.push(point);rec.km+=delta}
-    if(!rec.start)rec.start=Date.now();rec.status='Recording · Keep this page open';updateRec();
-  },error=>{
-    if(!rec)return;
-    if(error.code===1)Beacon.stop();
-    if(error.code===1&&!rec.points.length){stopRecording();modal('Location access needed','<p class="help">Allow location access in your browser settings to record a route, or log the activity manually.</p><div class="form-actions"><button class="secondary" data-action="manual">Manual entry</button><button class="primary" data-action="gps">Try again</button></div>');return}
-    rec.status=error.code===1?'Location permission was removed. You can save the recorded track.':'GPS signal unavailable. Waiting for a new fix…';updateRec();
-  },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+    if(!rec.start)rec.start=Number(pos.timestamp)||Date.now();
+    rec.status=native?'Recording · Android background tracking is on':'Recording · Keep this page open';updateRec();
+  };
+  if(native){
+    const token=++nativeStart;
+    (async()=>{
+      const permission=await native.LocalNotifications.checkPermissions();
+      if(permission.display!=='granted'){
+        const requested=await native.LocalNotifications.requestPermissions();
+        if(requested.display!=='granted')throw Error('Allow notifications to keep background tracking visible.');
+      }
+      const id=await native.BackgroundGeolocation.addWatcher({
+        backgroundTitle:'Routiq · Recording activity',
+        backgroundMessage:'Activity GPS is being recorded. Tap to return to Routiq.',
+        requestPermissions:true,
+        stale:false,
+        distanceFilter:0
+      },(position,error)=>{
+        if(error){if(rec){rec.status='Location unavailable. Check Routiq’s location permission and GPS settings.';updateRec()}return}
+        if(position)acceptPosition({coords:{latitude:position.latitude,longitude:position.longitude,accuracy:position.accuracy},timestamp:position.time});
+      });
+      if(token!==nativeStart||!rec){await native.BackgroundGeolocation.removeWatcher({id});return}
+      nativeWatch=id;
+    })().catch(error=>{
+      if(!rec)return;
+      const reason=String(error?.message||'');
+      stopRecording();modal('Background tracking unavailable',`<p class="help">${esc(reason||'Allow Routiq to use location and show its tracking notification, then try again.')}</p><div class="form-actions"><button class="primary" data-action="gps">Try again</button></div>`);
+    });
+  }else{
+    watch=navigator.geolocation.watchPosition(acceptPosition,error=>{
+      if(!rec)return;
+      if(error.code===1)Beacon.stop();
+      if(error.code===1&&!rec.points.length){stopRecording();modal('Location access needed','<p class="help">Allow location access in your browser settings to record a route, or log the activity manually.</p><div class="form-actions"><button class="secondary" data-action="manual">Manual entry</button><button class="primary" data-action="gps">Try again</button></div>');return}
+      rec.status=error.code===1?'Location permission was removed. You can save the recorded track.':'GPS signal unavailable. Waiting for a new fix…';updateRec();
+    },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  }
   timer=setInterval(updateRec,500);
 }
-function stopRecording(){Beacon.stop();if(watch!==null)navigator.geolocation.clearWatch(watch);clearInterval(timer);watch=null;timer=null;rec=null;render()}
+function stopRecording(){Beacon.stop();nativeStart++;if(watch!==null)navigator.geolocation.clearWatch(watch);if(nativeWatch&&window.RoutiqNativeTracking)window.RoutiqNativeTracking.BackgroundGeolocation.removeWatcher({id:nativeWatch}).catch(()=>{});clearInterval(timer);watch=null;nativeWatch=null;timer=null;rec=null;render()}
 function finishRecording(){if(!rec?.points.length||elapsed()<1)return;const {title,sport,start,km,points}=rec,sec=elapsed();stopRecording();addActivity({title,sport,date:new Date(start).toISOString(),km,sec,elev:null,points})}
 function confirmAction(title,description,action,label){
   modal(title,`<p class="help">${esc(description)}</p><div class="form-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" data-action="${esc(action)}">${esc(label)}</button></div>`);

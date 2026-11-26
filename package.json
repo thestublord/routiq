@@ -1,7 +1,22 @@
 {
   "name": "routiq",
   "private": true,
-  "scripts": { "build": "node scripts/build-vercel.mjs" },
-  "dependencies": { "firebase": "13.4.0" },
-  "devDependencies": { "esbuild": "0.25.12" }
+  "scripts": {
+    "build": "node scripts/build-vercel.mjs",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run android:sync && cap run android"
+  },
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "1.2.17",
+    "@capacitor/android": "^6.2.4",
+    "@capacitor/cli": "^6.2.4",
+    "@capacitor/core": "^6.2.4",
+    "@capacitor/local-notifications": "^6.1.3",
+    "dotenv": "^17.2.3",
+    "firebase": "13.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
 }
