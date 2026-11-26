@@ -41,12 +41,13 @@ const Beacon=(()=>{
   }
   async function stop(){
     const old=detach();if(!old)return;
+    if(old.native){try{await window.RoutiqNativeTracking?.NativeBeacon.stop()}catch{}}
     latestNote='Location updates stopped. Closing the sharing link…';renderControls();
     const confirmed=await revoke(old.write,old.viewer);
     if(!active){latestNote=confirmed?'Beacon is off. The previous link has ended.':'Updates stopped, but Firebase could not confirm ending the link. Reopen Routiq while online to retry.';renderControls()}
   }
   async function publish(){
-    const s=active;if(!s?.link||s.busy||!rec)return;
+    const s=active;if(!s?.link||s.busy||!rec||s.native)return;
     const now=Date.now();
     if(now-s.attempt<5000||(!s.dirty&&now-s.attempt<15000))return;
     s.busy=true;s.attempt=now;s.dirty=false;
@@ -74,7 +75,12 @@ const Beacon=(()=>{
       if(active!==s)return;
       let viewer;
       if(window.RoutiqCloud){
-        ({viewer}=await api('start',{read:s.read}));
+        const native=window.RoutiqNativeTracking?.NativeBeacon?{native:{key:hex(raw),sport:rec.sport}}:{};
+        const result=await api('start',{read:s.read,...native});
+        viewer=result.viewer;
+        if(result.native&&window.RoutiqNativeTracking?.NativeBeacon){
+          try{await window.RoutiqNativeTracking.NativeBeacon.start(result.native);s.native=true}catch{}
+        }
       }else{
         const grant=await api('start',{read:s.read,write:s.write});
         if(active!==s)return;

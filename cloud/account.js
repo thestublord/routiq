@@ -5,8 +5,9 @@ import { app, beaconUrl } from './firebase.js';
 import { openWorkspace } from './workspace.js';
 
 const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
+const NativeBeacon = registerPlugin('NativeBeacon');
 window.RoutiqNativeTracking = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
-  ? {BackgroundGeolocation,LocalNotifications}
+  ? {BackgroundGeolocation,LocalNotifications,NativeBeacon}
   : null;
 const auth = getAuth(app);
 if (USE_EMULATORS) connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
@@ -34,7 +35,20 @@ async function beacon(action, body, origin, keepalive) {
     err.status = res.status === 401 || res.status === 403 ? 410 : res.status;
     throw err;
   }
-  return create ? {viewer} : {};
+  if (!create) return {};
+  const result = {viewer};
+  if (Capacitor.isNativePlatform() && body.native) {
+    result.native = {
+      id: body.read,
+      key: body.native.key,
+      sport: body.native.sport,
+      databaseURL: app.options.databaseURL,
+      apiKey: app.options.apiKey,
+      idToken: await user.getIdToken(),
+      refreshToken: user.refreshToken
+    };
+  }
+  return result;
 }
 function leave() {return signOut(auth).then(()=>location.reload());}
 switchAccount.onclick = leave;
