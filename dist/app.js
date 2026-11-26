@@ -39,13 +39,13 @@ const activityDate = a => fmt(a.date,{month:'short',day:'numeric'});
 function when(a){const diff=dayKey(new Date(a.date));return diff===dayKey(new Date())?'Today':diff===dayKey(daysAgo(1))?'Yesterday':activityDate(a)}
 const sum = (arr,key) => arr.reduce((total,a)=>total+(Number(a[key])||0),0);
 function notify(message){const el=byId('toast');el.textContent=storageWarning?'Device storage unavailable. Changes last for this session.':message;el.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.style.display='none',3600)}
-let page='Overview',period=7,query='',sportFilter='All sports',rec=null,watch=null,timer=null;
+let page=location.hash==='#routes'?'Routes':'Overview',period=7,query='',sportFilter='All sports',rec=null,watch=null,timer=null;
 const dialog=byId('dialog'),content=byId('dialogBody');
 function modal(title,body){
   content.innerHTML=`<div class="modalhead"><h2 id="dialogTitle">${esc(title)}</h2><button class="icon-btn" data-action="close" aria-label="Close">${icon('close')}</button></div>${body}`;
   dialog.setAttribute('aria-labelledby','dialogTitle');if(!dialog.open)dialog.showModal();paintMaps();
 }
-function paintMaps(){requestAnimationFrame(()=>document.querySelectorAll('canvas[data-map]').forEach(c=>{const a=state.activities.find(row=>row.id===c.dataset.map);if(a)RouteMap.draw(c,a)}))}
+function paintMaps(){requestAnimationFrame(()=>document.querySelectorAll('canvas[data-map]').forEach(c=>{const a=state.activities.find(row=>row.id===c.dataset.map)||Planner.saved().find(row=>row.id===c.dataset.map);if(a)RouteMap.draw(c,a)}))}
 function dateWindow(days){const start=daysAgo(days-1);start.setHours(0,0,0,0);const end=new Date();end.setHours(23,59,59,999);return state.activities.filter(a=>new Date(a.date)>=start&&new Date(a.date)<=end)}
 function hero(a){
   if(!a)return `<section class="panel empty"><h2>Your first activity</h2><p>Log a run, ride, or walk to start your training history.</p></section>`;
@@ -72,6 +72,7 @@ function list(rows){
 const filtered=()=>recent().filter(a=>(sportFilter==='All sports'||a.sport===sportFilter)&&a.title.toLowerCase().includes(query.toLowerCase()));
 function updateList(){byId('activityList').innerHTML=list(filtered());paintMaps()}
 function render(){
+  Planner.unmount();
   const rows=recent();byId('pageTitle').textContent=page;document.title=`${page} · Routiq`;
   byId('today').textContent=fmt(new Date(),{weekday:'long',month:'long',day:'numeric',year:'numeric'}).toUpperCase();
   byId('profileName').textContent=state.name;byId('initials').textContent=state.name.trim().split(/\s+/).slice(0,2).map(v=>v[0]).join('').toUpperCase();
@@ -80,10 +81,11 @@ function render(){
   let html='';
   if(page==='Overview')html=hero(rows[0])+`<div class="dashboard-grid">${chart()}${goal()}</div><div class="section-title"><h2>Recent activities</h2><button class="textbtn" data-page="Activities">View all activities</button></div>`+list(rows.slice(0,3));
   if(page==='Activities')html=`<div class="toolbar"><input type="search" id="search" aria-label="Search activities" placeholder="Search activities" value="${esc(query)}"><select id="sportFilter" aria-label="Filter by sport">${['All sports','Run','Ride','Walk'].map(s=>`<option ${s===sportFilter?'selected':''}>${s}</option>`).join('')}</select></div><div id="activityList">${list(filtered())}</div>`;
-  if(page==='Routes')html=rows.some(hasMap)?`<div class="routes">${rows.filter(hasMap).map(a=>`<button class="route-card" data-detail="${esc(a.id)}"><div class="route-image">${mapHtml(a)}</div><section><h2>${esc(a.title)}</h2><div class="meta">${icon(sportIcon(a.sport))}${distance(a.km)} km · ${activityDate(a)}</div></section></button>`).join('')}</div>`:'<div class="panel empty">Record an outdoor activity with GPS to add a route.</div>';
+  if(page==='Routes')html=Planner.layout()+`<div class="section-title"><h2>Recorded routes</h2></div>`+(rows.some(hasMap)?`<div class="routes">${rows.filter(hasMap).map(a=>`<button class="route-card" data-detail="${esc(a.id)}"><div class="route-image">${mapHtml(a)}</div><section><h2>${esc(a.title)}</h2><div class="meta">${icon(sportIcon(a.sport))}${distance(a.km)} km · ${activityDate(a)}</div></section></button>`).join('')}</div>`:'<div class="panel empty">Record an outdoor activity with GPS to add a route.</div>');
   if(page==='Statistics')html=`<div class="stats-tiles">${[['Activities',rows.length,''],['Total distance',distance(sum(rows,'km')),'km'],['Total time',Number((sum(rows,'sec')/3600).toFixed(1)),'h']].map(([t,v,u])=>`<div class="panel"><p class="minor">${t}</p><div class="big">${v} <small>${u}</small></div></div>`).join('')}</div>${chart()}`;
   if(page==='Goals')html=`<div class="goalpage">${goal()}</div>`;
   byId('view').innerHTML=html+`<div class="mobile-settings"><button class="textbtn" data-action="profile">Workspace settings</button></div>`;
+  if(page==='Routes')Planner.mount();
   paintMaps();
 }
 function detail(id){
@@ -145,7 +147,7 @@ byId('profile').addEventListener('click',profile);
 byId('log').addEventListener('click',()=>logForm());
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
-  if(b.dataset.page){page=b.dataset.page;render();window.scrollTo(0,0);return}
+  if(b.dataset.page){page=b.dataset.page;history.replaceState(null,'',location.pathname+location.search+(page==='Routes'?'#routes':''));render();window.scrollTo(0,0);return}
   if(b.dataset.detail){detail(b.dataset.detail);return}
   if(b.dataset.remove){confirmAction('Delete activity?','This activity will be removed from your training history.',`delete:${b.dataset.remove}`,'Delete activity');return}
   const action=b.dataset.action;
